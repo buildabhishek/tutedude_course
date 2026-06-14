@@ -1,32 +1,38 @@
-# GenAI Assignment 14 - Feature Engineering, Encoding, Scaling and Pipelines
+# Assignment 14 - Feature Engineering, Encoding, Scaling and Pipelines
 
-## Tasks Covered:
+## Dataset
+
+Titanic Dataset
+
+Kaggle Link:
+https://www.kaggle.com/datasets/yasserh/titanic-dataset
+
+## Tasks Completed
+
 - Feature Engineering
-- Date and Text Features
+- Text Feature Creation
 - One Hot Encoding
-- ColumnTransformer
+- Column Transformer
 - StandardScaler
 - MinMaxScaler
 - Preprocessing Pipeline
-- Full ML Pipeline
+- Full Machine Learning Pipeline
 - Pipeline Benefits
 
-## Files:
-- task1_feature_engineering.py
-- task2_date_text_features.py
-- task3_one_hot_encoding.py
-- task4_column_transformer.py
-- task5_standard_scaler.py
-- task6_minmax_scaler.py
-- task7_preprocessing_pipeline.py
-- task8_full_pipeline_model.py
-- task9_pipeline_benefits.py
+## Libraries Used
 
-## How to Run:
-python filename.py
+- Pandas
+- NumPy
+- Scikit-Learn
 
-Example:
-python task1_feature_engineering.py
+## Learning Outcomes
 
-## Submitted By:
-Abhishek Thakare
+- Created new features
+- Applied categorical encoding
+- Compared scaling techniques
+- Built preprocessing pipelines
+- Built complete machine learning pipelines
+- Understood data leakage prevention
+
+## Submitted By
+- Abhishek Thakare
