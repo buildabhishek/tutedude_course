@@ -1,0 +1,2 @@
+Vocabulary Size: 7877
+Training Time: 0.9375522136688232
