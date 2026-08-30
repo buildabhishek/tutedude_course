@@ -1,0 +1,55 @@
+Personal Knowledge Assistant - Expanded Policy Reference
+
+This file goes into more detail on the same HR and IT policies covered in
+notes.txt, mainly so there's enough text across the two files to actually
+need chunking instead of fitting in one small block.
+
+Leave Policy - Full Details
+Full-time employees accrue 18 paid leaves per calendar year, credited at the
+start of the year rather than month by month. Unused leaves up to a maximum
+of 8 days can be carried forward into the next calendar year; anything above
+that is forfeited. Leave requests go through the HR portal and need at least
+2 working days' notice for planned leave. Sick leave taken without notice is
+allowed but should be regularized on the portal within 3 working days of
+returning, along with a doctor's note if the absence was longer than 2 days.
+Maternity and paternity leave follow separate statutory policies and are not
+deducted from the standard 18-day pool.
+
+Reimbursement Policy - Full Details
+Eligible expense categories are: local travel for work purposes, internet
+bills for employees on a remote or hybrid arrangement, and one-time
+work-from-home equipment purchases (chair, monitor, keyboard) up to a fixed
+annual cap set by HR. Bills must be submitted through the HR portal within 30
+days of the expense date; anything submitted later needs manager approval to
+be considered. Once approved, reimbursement is paid out in the next payroll
+cycle, not immediately. International travel expenses follow a separate
+travel policy and are not covered by this general reimbursement process.
+
+IT Support - Full Details
+Standard laptop, monitor, and peripheral issues go through the internal IT
+helpdesk ticketing system, with a target first response time of 4 working
+hours. VPN access issues are also handled through the same ticketing system.
+Password resets are entirely self-serve through the SSO portal and do not
+require a ticket at all. For anything classified as critical - complete
+system downtime, inability to log in to any company system, or a suspected
+security incident - employees should call the IT helpline directly instead of
+waiting in the regular ticket queue, since critical issues are handled
+separately from the standard queue.
+
+Onboarding Process - Full Details
+The onboarding process spans the first 3 working days for every new hire,
+regardless of department. Day 1 is handled entirely by IT: laptop handover,
+VPN configuration, email and SSO account creation. Day 2 is handled by HR:
+a walkthrough of the leave policy, reimbursement process, and the code of
+conduct training requirement. Day 3 is handled by the new hire's reporting
+manager and is specific to their project or team - this is the only day of
+onboarding that isn't standardized across the company.
+
+Code of Conduct Training - Full Details
+Every employee must complete the annual code of conduct training within 30
+days of their joining date, tracked automatically by HR through the training
+portal. The training covers expected workplace behavior, data confidentiality
+obligations, and how to report a conflict of interest. Managers receive an
+automatic reminder if a direct report hasn't completed the training within 20
+days of joining, so it rarely goes unnoticed, but it remains the employee's
+own responsibility to complete it on time.

@@ -10,5 +10,4 @@ venv
 *.env
 *.zip
 *.png
-*.txt
 *.pdf

@@ -1,0 +1,36 @@
+Personal Knowledge Assistant - Project Notes
+
+Introduction
+This project aims to build a Personal Knowledge Assistant that can answer questions
+from a variety of personal and company data sources. Before we can build any kind
+of retrieval-augmented generation (RAG) system, we first need a reliable way to
+ingest data from many different formats and turn it into clean, structured text
+that a language model can reason over.
+
+Why Document Loaders Matter
+Real-world knowledge is scattered across many formats: plain text notes, CSV
+spreadsheets, PDF reports, and web pages. Each format stores information
+differently, so each one needs its own loading strategy. LangChain solves this
+with a family of Document Loader classes that all return a common Document
+object containing page_content and metadata, regardless of the original source
+format. This uniformity is what allows downstream components, such as text
+splitters and vector stores, to work with any data source in the same way.
+
+Why Chunking Matters
+Large language models have a limited context window, so an entire document
+cannot always be passed in at once. Even when it technically fits, retrieval
+quality is usually better when text is broken into smaller, semantically
+coherent chunks. Good chunking preserves meaning across boundaries, keeps
+related sentences together, and adds a small overlap between chunks so that
+context is not lost at the edges.
+
+Project Goals
+1. Load data from text files, CSV files, PDFs, and web pages.
+2. Split the loaded documents into meaningful chunks.
+3. Prepare the chunks for later use in a retrieval-augmented pipeline.
+4. Avoid using vector databases or LLM calls at this stage of the project.
+
+Conclusion
+Getting ingestion and chunking right is the foundation of every reliable GenAI
+system. Skipping this step or doing it carelessly leads to poor retrieval
+quality later on, no matter how good the embedding model or the LLM is.

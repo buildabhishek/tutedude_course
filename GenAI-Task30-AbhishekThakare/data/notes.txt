@@ -1,0 +1,41 @@
+Personal Knowledge Assistant - Internal Notes
+
+What is a Personal Knowledge Assistant?
+A Personal Knowledge Assistant is the small project I've been building across these
+GenAI assignments. The idea is simple: instead of a new employee searching through five
+different HR and IT documents to find one answer, they just ask the assistant a question
+in plain English and it pulls the answer from the company's internal documents.
+
+Employee Onboarding Process
+New employees at the company go through a 3-day onboarding process. Day 1 covers laptop
+setup, VPN access, and email account creation, handled by the IT team. Day 2 covers HR
+policies - leave policy, reimbursement process, and code of conduct. Day 3 is project-specific
+training handled by the employee's reporting manager.
+
+Technologies used for employee onboarding
+The onboarding portal is built using React on the frontend and a Python FastAPI backend.
+Employee data is stored in SQL Server. Login is handled through company SSO. The Personal
+Knowledge Assistant chatbot itself is being prototyped using LangChain, with documents stored
+in a FAISS vector store so the assistant can answer onboarding-related questions instantly.
+
+Leave Policy
+Employees get 18 paid leaves per calendar year, plus public holidays as per the state
+calendar. Leave requests must be submitted at least 2 days in advance through the HR portal,
+except in case of a medical emergency, where it can be informed after the fact along with
+a doctor's note.
+
+Reimbursement Process
+Employees can claim reimbursement for approved work-related expenses (travel, internet bill
+for remote work, and work-from-home equipment) by submitting bills on the HR portal within
+30 days of the expense. Reimbursements are processed within one payroll cycle after approval.
+
+IT Support
+For laptop or VPN issues, employees should raise a ticket on the internal IT helpdesk portal.
+Password reset requests are self-serve through the SSO portal and do not need a ticket.
+Critical issues (system down, cannot login at all) can be escalated by calling the IT helpline
+directly instead of waiting for a ticket to be picked up.
+
+Code of Conduct
+All employees are expected to complete the annual code of conduct training within 30 days of
+joining. This covers workplace behavior, data confidentiality, and conflict of interest
+guidelines. The training is mandatory and tracked by HR.
