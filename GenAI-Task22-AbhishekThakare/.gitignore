@@ -1,0 +1,5 @@
+.env
+pycache/
+.ipynb_checkpoints/
+faiss_index/
+chroma_db/

@@ -2,3 +2,13 @@
 *.db
 *.json
 Notes
+*__pycache__
+venv
+.venv
+*.bin
+*.sqlite3
+*.env
+*.zip
+*.png
+*.txt
+*.pdf

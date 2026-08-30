@@ -8,7 +8,7 @@
 | **Dataset Source** | The Movie Database (TMDB) via Kaggle |
 | **Kaggle Link** | https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata |
 
-The dataset contains metadata for **4,803 movies** including title, overview (plot description),  
+The dataset contains metadata for **4,803 movies** including title, overview (plot description),
 genres, keywords, vote average, and release date.
 
 **Key columns used for recommendations:**
@@ -73,7 +73,7 @@ GenAI-Task20-AbhishekThakare/
 ## How to Run
 
 ### Step 1 — Download the dataset
-Go to https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata  
+Go to https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata
 Download `tmdb_5000_movies.csv` and place it in the project folder.
 
 ### Step 2 — Install dependencies
@@ -104,9 +104,6 @@ jupyter notebook task20.ipynb
    - **Start command:** `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`
 5. Click **Create Web Service**.
 6. Render will build and deploy automatically. Copy the live URL.
-
-> **Important:** Commit `tmdb_5000_movies.csv` to the repo, or mount it as a Render persistent disk.  
-> The free Render tier sleeps after inactivity — the first request after sleep may take ~30 seconds.
 
 ---
 
@@ -146,12 +143,12 @@ jupyter notebook task20.ipynb
 
 ## Deployed App
 
-**Live URL:** *(Add your Render URL here after deployment)*
+**Live URL:** *https://movie-recommendation-abhishek.onrender.com/*
 
 ---
 
 ## Submitted By
 
-**Abhishek Thakare**  
-Assignment 20 — GenAI / NLP Track  
+**Abhishek Thakare**
+Assignment 20 — GenAI / NLP Track
 TuteDude
