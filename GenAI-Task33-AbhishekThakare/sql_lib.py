@@ -3,6 +3,16 @@ Shared logic for Assignment 33 - same reasoning as agents_lib.py in
 Assignment 32 and rag_groq.py in Assignment 30: the real database setup,
 connection, and agent-building code lives here so the notebook is testing
 these functions directly instead of a simplified inline copy of them.
+
+Resubmission note: get_llm() defaulted to "llama3", which does not support
+Ollama's tool calling API. create_sql_agent(..., agent_type="tool-calling")
+needs the model to actually call sql_db_query itself - on a model without
+tool support, it doesn't error, it just answers directly from whatever the
+model already "knows" (or invents) about the question, without ever
+touching the database. That's a hallucinated answer that can look
+completely plausible and still not match a single row in company.db, which
+is exactly what happened in the first submission. Switched the default to
+"llama3.1" here, same fix as agents_lib.py in Assignment 32.
 """
 
 import os
@@ -180,7 +190,9 @@ def get_mysql_db(
 # PART 4 - SQL Toolkit & Agent
 # ---------------------------------------------------------------------------
 
-def get_llm(model="llama3", temperature=0):
+def get_llm(model="llama3.1", temperature=0):
+    """Defaults to llama3.1, not llama3 - see the module docstring's
+    resubmission note for why that switch matters specifically here."""
     return ChatOllama(model=model, temperature=temperature)
 
 
@@ -195,7 +207,13 @@ def build_sql_agent(db, llm, verbose=True):
     """Task 6 - LangChain's prebuilt SQL agent, which already wires the
     toolkit's tools together with a ReAct-style loop, so there's no reason
     to hand-roll one the way agents_lib.py did for the generic tools in
-    Assignment 32."""
+    Assignment 32.
+
+    return_intermediate_steps=True is the important part for this
+    resubmission - it's what lets run_sql_agent() below actually show
+    which tool the agent called and with what SQL, instead of only the
+    final text. That's the difference between trusting the answer and
+    being able to check it."""
     toolkit = build_sql_toolkit(db, llm)
     return create_sql_agent(
         llm=llm,
@@ -203,4 +221,51 @@ def build_sql_agent(db, llm, verbose=True):
         verbose=verbose,
         agent_type="tool-calling",
         handle_parsing_errors=True,
+        return_intermediate_steps=True,
     )
+
+
+def run_sql_agent(agent, question):
+    """Runs the agent and reports whether it actually called sql_db_query
+    at all - a model without real tool support will happily return a
+    normal-looking final answer having never touched the database, which
+    is precisely the failure the mentor flagged in the first submission.
+    Returns (answer, queries_run) where queries_run is the list of actual
+    SQL strings the agent sent to sql_db_query, empty if it never queried."""
+    result = agent.invoke({"input": question})
+    steps = result.get("intermediate_steps", [])
+
+    queries_run = []
+    for action, observation in steps:
+        if action.tool == "sql_db_query":
+            queries_run.append(action.tool_input)
+
+    return result["output"], queries_run
+
+
+def get_ground_truth(db_path="company.db"):
+    """Computes the real answers to the Task 7 questions directly with
+    SQL, bypassing the LLM entirely, so the agent's answers can be checked
+    against something independent instead of just trusted."""
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute("SELECT department, COUNT(*) FROM employees GROUP BY department")
+    by_department = dict(cur.fetchall())
+
+    cur.execute("SELECT name, salary FROM employees ORDER BY salary DESC LIMIT 1")
+    highest_paid = cur.fetchone()
+
+    cur.execute("SELECT SUM(amount) FROM sales")
+    total_sales = cur.fetchone()[0]
+
+    cur.execute("SELECT department, AVG(salary) FROM employees GROUP BY department")
+    avg_salary_by_department = dict(cur.fetchall())
+
+    conn.close()
+    return {
+        "employees_by_department": by_department,
+        "highest_paid_employee": highest_paid,
+        "total_sales_amount": total_sales,
+        "avg_salary_by_department": avg_salary_by_department,
+    }

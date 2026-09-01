@@ -1,0 +1,112 @@
+The Rise of Retrieval-Augmented Generation in Enterprise AI
+
+Large language models changed what people expect from software almost overnight. Ask a
+model a question and it responds in fluent, confident prose - no menus, no search results
+page, just an answer. But that fluency hides a real limitation: a model only knows what it
+saw during training, frozen at some cutoff date, and it has no built-in way to look anything
+up. For a general trivia question, that's rarely a problem. For a company that wants an AI
+assistant to answer questions about its own internal policies, product documentation, or
+last quarter's sales figures, it's a dealbreaker. The model was never trained on any of that,
+and no amount of clever prompting will make it recall information it never saw in the first
+place.
+
+Retrieval-Augmented Generation, usually shortened to RAG, is the industry's answer to this
+gap. The idea itself is not complicated: before asking the language model to answer a
+question, first go find the relevant documents from wherever the real information actually
+lives, and hand those documents to the model as extra context alongside the question. The
+model then answers using what it was given, rather than what it happened to memorize months
+or years earlier. It's less like asking a person to recite something from memory and more
+like handing them the right page of a manual and asking them to read it aloud in their own
+words.
+
+Why Naive Prompting Isn't Enough
+
+A tempting shortcut is to just paste an entire company's documentation into a single prompt
+and ask the question directly. For a handful of short documents, this actually works
+reasonably well. But it breaks down fast as the amount of text grows. Every model has a
+maximum context window - a hard limit on how much text it can accept in one go - and company
+knowledge bases routinely run into the hundreds of thousands or millions of words. Even when
+everything technically fits, stuffing a huge, mostly irrelevant block of text into every
+single question is wasteful: it costs more to run, takes longer to respond, and tends to
+bury the one or two actually relevant sentences somewhere in the middle of a wall of text the
+model has to wade through. Models are also measurably worse at making use of information
+buried in the middle of a very long prompt compared to information near the beginning or end,
+a pattern researchers sometimes describe as a "lost in the middle" effect.
+
+The Retrieval Step
+
+This is where retrieval comes in. Instead of handing over everything, RAG systems first
+convert every document into small chunks, then represent each chunk as a vector - a long
+list of numbers meant to capture what that chunk of text is actually about, produced by an
+embedding model trained specifically for this purpose. These vectors get stored in a
+specialized vector database. When a real question comes in, it gets converted into a vector
+the same way, and the database is searched for the stored chunks whose vectors are
+mathematically closest to the question's vector. Those handful of closest matches - usually
+just three to five short chunks - are what actually get attached to the prompt, instead of
+the entire document collection.
+
+This single design decision is what makes RAG practical at scale. A company can index
+millions of words once, ahead of time, and then every individual question only ever pulls in
+a small, targeted slice of that knowledge base. The cost and speed of answering a question no
+longer depends on the total size of the documentation - it depends only on how many chunks
+get retrieved, which stays roughly constant no matter how large the underlying knowledge base
+grows.
+
+Grounding and Hallucination
+
+A second, equally important benefit of retrieval is grounding. Language models are prone to
+"hallucination" - producing answers that sound completely confident and plausible but are
+simply incorrect, because the model is fundamentally predicting likely next words rather than
+consulting a source of truth. When a model is explicitly instructed to answer only from a
+provided block of retrieved context, and told to say it doesn't know when the answer isn't
+present in that context, hallucination drops substantially. The model isn't reasoning from a
+blank slate anymore - it has an actual passage in front of it to work from, and a clear
+instruction not to wander beyond it. This is precisely why so many production RAG systems
+put real engineering effort into the prompt's wording: a system prompt that says "use the
+following context to answer" behaves very differently from one that adds "and if the answer
+isn't in the context, say you don't know" - the second version measurably reduces confident
+wrong answers, at the cost of occasionally being unhelpful when the retrieval step genuinely
+missed something relevant.
+
+Beyond the Basics: Smarter Retrieval
+
+Plain similarity search - just grabbing the closest few chunks - works well as a starting
+point, but real systems often add refinements on top of it. Maximal Marginal Relevance
+re-ranks candidate chunks to reduce near-duplicate results, favoring a set of chunks that are
+each individually relevant but collectively cover more distinct ground rather than repeating
+the same point three different ways. Multi-query retrieval has the language model generate
+several different phrasings of the user's question first, since a document might use
+different wording than the user did, and searches with each phrasing before merging the
+results together. Contextual compression takes retrieved chunks and trims each one down to
+just the sentence or two that's actually relevant, rather than handing over the whole
+surrounding paragraph, which keeps the final prompt tighter and easier for the model to make
+good use of.
+
+Conversation and Memory
+
+Real usage rarely stops at one question. People ask a question, get an answer, and then ask
+a natural follow-up - "what about the exception to that rule?" or "can you explain that more
+simply?" - that only makes sense in light of what was just said. A pure RAG system with no
+memory treats every question as a fresh start, which makes these completely ordinary
+follow-ups fail. The fix is to keep a running history of the conversation and feed it into
+the prompt alongside the retrieved context, so the model can resolve a vague follow-up
+against something concrete that was actually said a moment earlier. Left unchecked, though,
+that history grows without bound - every additional turn makes every future prompt a little
+larger, a little slower, and eventually too large to fit at all. Production systems
+typically cap the conversation history to some fixed number of recent turns, trimming the
+oldest messages once that limit is passed, trading perfect long-term memory for bounded,
+predictable performance.
+
+Where RAG Fits in a Real Product
+
+None of this exists in isolation - a real internal assistant is usually a small stack of
+these pieces working together: documents get loaded and split into chunks, embedded and
+stored once, searched at question time, formatted into a grounded prompt alongside whatever
+conversation history is still in the window, and finally sent to a language model to produce
+the actual answer. Swapping out any single piece - a different embedding model, a different
+vector store, a faster underlying language model - rarely requires touching anything else in
+that chain, since each piece only cares about the shape of what it receives and produces, not
+which specific implementation is sitting on the other side of it. That modularity is a big
+part of why RAG has become the default architecture for enterprise document Q&A rather than
+a niche technique: it's less a single clever trick and more a well-understood pattern that
+keeps working as the underlying models and tools continue to improve underneath it.
