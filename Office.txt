@@ -1,0 +1,971 @@
+Yes — these notes are actually pointing toward the production-grade design problems your mentor expects you to solve. They go beyond “XML → TXT” and into idempotency, state management, concurrency, observability, fault tolerance, scalability, and database design.
+
+Let me organize your mentor's points into a proper engineering picture.
+
+1. The central problem
+
+Your middleware is essentially:
+
+XML uploaded
+                │
+                ▼
+       Azure Blob Trigger
+                │
+                ▼
+       Validate the file
+                │
+                ▼
+        Process customers
+                │
+       ┌────────┴────────┐
+       │                 │
+   Duplicate          Valid
+   customers         customers
+       │                 │
+       ▼                 ▼
+ Error file          TXT/output
+       │                 │
+       └────────┬────────┘
+                ▼
+          Archive input
+
+But the difficult questions are:
+
+What happens if the same file is triggered twice?
+
+What happens if the Function crashes halfway?
+
+What happens with 10 million customers?
+
+What happens when 400/1000 customers are duplicates?
+
+How do we know whether a file is processing, completed, failed, or partially processed?
+
+How do we prevent an error file from triggering the Function again?
+
+How do we correlate every log with the original file?
+
+How do we avoid flooding Application Insights?
+
+Why Dapper instead of EF Core?
+
+Why stored procedure?
+
+How do we prevent concurrent executions from corrupting state?
+
+
+Those are the real project requirements.
+
+
+---
+
+2. State management
+
+This is probably one of the most important requirements.
+
+You need a file-level state.
+
+For example:
+
+RECEIVED
+   ↓
+PROCESSING
+   ↓
+COMPLETED
+
+or
+
+RECEIVED
+   ↓
+PROCESSING
+   ↓
+PARTIALLY_COMPLETED
+   ↓
+COMPLETED
+
+or:
+
+RECEIVED
+   ↓
+PROCESSING
+   ↓
+FAILED
+
+A database table could conceptually look like:
+
+FileProcessing
+--------------------------------
+Id
+FileGuid
+FileName
+Status
+TotalRecords
+ProcessedRecords
+SuccessRecords
+DuplicateRecords
+FailedRecords
+StartedAt
+CompletedAt
+ErrorMessage
+
+Then if someone asks:
+
+> "What happened to customer_20260904.xml?"
+
+
+
+You don't need to inspect logs manually.
+
+You can query:
+
+FileName:
+customer_20260904.xml
+
+Status:
+COMPLETED
+
+Total:
+1000
+
+Successful:
+600
+
+Duplicate:
+400
+
+Error File:
+customer_20260904_error.txt
+
+Started:
+12:10:05
+
+Completed:
+12:10:18
+
+That's state management.
+
+
+---
+
+3. GUID — why?
+
+Your mentor specifically mentioned GUID.
+
+Give every processing operation a unique identifier.
+
+For example:
+
+File: customer_001.xml
+
+Processing GUID:
+7f3a9c2e-....
+
+Then put that GUID everywhere:
+
+FileName: customer_001.xml
+CorrelationId: 7f3a9c2e-....
+Status: PROCESSING
+
+Your logs become:
+
+[INFO]
+File=customer_001.xml
+CorrelationId=7f3a9c2e
+Status=PROCESSING
+
+Then later:
+
+[INFO]
+File=customer_001.xml
+CorrelationId=7f3a9c2e
+Processed=600
+Duplicates=400
+Status=COMPLETED
+
+This is correlation.
+
+
+---
+
+4. "File name should be everywhere"
+
+Your mentor is absolutely right here.
+
+Don't produce logs like:
+
+Processing started
+Processing customer
+Database operation completed
+File completed
+
+Imagine 20 files processing simultaneously.
+
+Which file?
+
+Instead:
+
+FileName=Customer_001.xml
+CorrelationId=abc123
+Processing started
+
+FileName=Customer_001.xml
+CorrelationId=abc123
+Validation completed
+TotalRecords=1000
+
+FileName=Customer_001.xml
+CorrelationId=abc123
+DuplicateRecords=400
+
+FileName=Customer_001.xml
+CorrelationId=abc123
+Output file generated
+
+This makes Application Insights actually useful.
+
+
+---
+
+5. Empty files
+
+Simple but important validation:
+
+XML uploaded
+    │
+    ▼
+Is file empty?
+    │
+   YES
+    │
+    ▼
+Don't process
+    │
+    ▼
+Log reason
+    │
+    ▼
+Move to error
+
+You should distinguish:
+
+Empty file
+
+from:
+
+Malformed XML
+
+from:
+
+Valid XML but no customer records
+
+These are different business/technical conditions.
+
+
+---
+
+6. The 1000 → 600 + 400 scenario
+
+This is an important requirement.
+
+Suppose:
+
+Input XML
+1000 customers
+
+Database already contains:
+
+400 customers
+
+Then:
+
+1000 input
+ ├── 400 duplicate
+ └── 600 valid/new
+
+You don't want the whole file to fail.
+
+Instead:
+
+Incoming
+customer.xml
+     │
+     ├───────────────┐
+     │               │
+     ▼               ▼
+ 600 valid        400 duplicate
+     │               │
+     ▼               ▼
+ Archive          Error
+ customer.txt    customer_error.txt
+
+And the database/file status records:
+
+Total       = 1000
+Successful  = 600
+Duplicate   = 400
+Failed      = 0
+Status      = COMPLETED_WITH_ERRORS
+
+That is much more useful than simply:
+
+SUCCESS
+
+
+---
+
+7. The 10-million-customer question 🚨
+
+This is where your mentor is testing whether you're thinking beyond the happy path.
+
+They asked:
+
+> "Will it check each and everyone and proceed with logs of each and every one?"
+
+
+
+No.
+
+You should absolutely avoid:
+
+for each customer:
+    query database
+    log customer
+    insert customer
+
+For 10 million records, that's potentially catastrophic.
+
+You'd create:
+
+millions of DB operations
+
+millions of logs
+
+massive memory pressure
+
+long execution time
+
+connection pressure
+
+possible SQL throttling/failure
+
+
+Instead, think batch processing.
+
+For example:
+
+10,000,000 customers
+
+       ↓
+
+Batch 1 = 5,000
+Batch 2 = 5,000
+Batch 3 = 5,000
+...
+
+And send batches to SQL.
+
+
+---
+
+8. Stored procedure becomes important here
+
+Your mentor's:
+
+> "Stored procedure?"
+
+
+
+is likely pointing toward moving some DB-heavy work into SQL.
+
+Instead of:
+
+C#
+   ↓
+SELECT customer
+   ↓
+C#
+   ↓
+check duplicate
+   ↓
+INSERT
+
+you can send a batch to SQL and let SQL perform set-based operations.
+
+Conceptually:
+
+C#
+  │
+  │ batch
+  ▼
+SQL
+  │
+  ├── identify duplicates
+  ├── insert valid records
+  └── return results
+
+SQL is extremely good at set-based operations.
+
+That's much better than making 10 million individual round trips.
+
+
+---
+
+9. Dapper vs Entity Framework
+
+This is probably the discussion you need to understand particularly well.
+
+Your mentor asks:
+
+> Why Dapper?
+
+
+
+and:
+
+> Why not Entity Framework and do less work?
+
+
+
+There isn't a universal answer that Dapper is better.
+
+They're different tools.
+
+Entity Framework Core
+
+EF gives you:
+
+DbContext
+   ↓
+Entities
+   ↓
+Relationships
+   ↓
+LINQ
+   ↓
+Change Tracking
+   ↓
+SQL
+
+Advantages:
+
+ORM
+
+Relationships
+
+LINQ
+
+Change tracking
+
+migrations
+
+less SQL
+
+developer productivity
+
+
+Dapper
+
+Dapper is a micro-ORM.
+
+You explicitly write SQL:
+
+connection.QueryAsync<Customer>(
+    "SELECT ...",
+    parameters);
+
+Advantages:
+
+lightweight
+
+very close to SQL
+
+excellent control over queries
+
+less abstraction
+
+useful for stored-procedure-heavy systems
+
+generally predictable SQL behavior
+
+
+But:
+
+> "Dapper is faster" is not enough justification for choosing it.
+
+
+
+Your architectural justification should be based on the actual workload.
+
+For this project, if the application is heavily based around:
+
+Stored Procedures
+Batch operations
+Set-based SQL
+Controlled queries
+
+then Dapper can be a reasonable choice.
+
+But if you're primarily doing:
+
+CRUD
+relationships
+complex entity graphs
+LINQ queries
+domain entities
+
+then EF Core may be the better abstraction.
+
+Your mentor may actually be pushing you to justify the decision rather than blindly use Dapper.
+
+
+---
+
+10. DbContext
+
+If you use EF Core:
+
+Azure Function
+      │
+      ▼
+Service
+      │
+      ▼
+DbContext
+      │
+      ▼
+Azure SQL
+
+But Azure Functions introduces an important consideration:
+
+Don't treat DbContext like a global singleton.
+
+DbContext is generally designed as a short-lived unit-of-work.
+
+With Functions, dependency lifetime and concurrent invocations matter.
+
+You need to think about:
+
+Invocation A → DbContext A
+
+Invocation B → DbContext B
+
+Invocation C → DbContext C
+
+rather than:
+
+All invocations
+      ↓
+ONE DbContext
+
+That could cause concurrency/thread-safety problems.
+
+
+---
+
+11. "Function should be closed"
+
+This sounds like your mentor is talking about execution/concurrency behavior.
+
+Suppose:
+
+File A arrives
+   ↓
+Function starts
+
+Before A finishes:
+
+File B arrives
+   ↓
+another invocation starts
+
+That's normal behavior for Azure Functions, depending on trigger/concurrency configuration.
+
+You need to decide what your application actually allows.
+
+If only one file should process at a time, you need an explicit concurrency strategy.
+
+If multiple files can process simultaneously, your state/database/storage design must be concurrency-safe.
+
+The important point:
+
+> Don't assume "the Function" is a single continuously running process.
+
+
+
+Azure Functions is an event-driven compute model.
+
+
+---
+
+12. "Application should not hang"
+
+This is a major production requirement.
+
+Imagine:
+
+XML
+ ↓
+Function
+ ↓
+SQL call
+ ↓
+SQL hangs
+ ↓
+Function waits forever
+
+Bad.
+
+You need:
+
+cancellation
+
+timeouts
+
+bounded processing
+
+exception handling
+
+retry strategy
+
+database command timeout
+
+meaningful failure state
+
+idempotency
+
+
+Conceptually:
+
+Operation
+   │
+   ├── succeeds → continue
+   │
+   ├── transient failure → retry
+   │
+   └── timeout/fatal failure → fail safely
+
+Never design:
+
+while (!success)
+{
+    tryAgain();
+}
+
+😄 That's how you accidentally create an infinite retry loop.
+
+
+---
+
+13. The folder rename → infinite retry problem
+
+This is another very important Azure Blob Trigger concept.
+
+Suppose:
+
+/input/customer.xml
+
+gets processed.
+
+Your code decides:
+
+move → archive/customer.xml
+
+But because of how the trigger/storage path is configured, the moved/created blob may cause another trigger.
+
+Then:
+
+archive/customer.xml
+       ↓
+Function
+       ↓
+move archive/customer.xml
+       ↓
+trigger
+       ↓
+Function
+       ↓
+...
+
+💥 Loop.
+
+The key architectural rule:
+
+> Separate input and output/error/archive paths and ensure the trigger only watches the intended input location.
+
+
+
+For example:
+
+container/
+│
+├── input/
+│    └── customer.xml       ← TRIGGER WATCHES THIS
+│
+├── processing/
+│
+├── archive/
+│    └── customer.xml
+│
+└── error/
+     └── customer_error.xml
+
+Your trigger should be scoped to:
+
+input/
+
+not:
+
+container/
+
+And you should still design idempotency so duplicate delivery doesn't corrupt processing.
+
+
+---
+
+14. Health check
+
+There are actually two concepts here.
+
+Application health
+
+Can my application reach its dependencies?
+
+Function
+   │
+   ├── Azure SQL → Healthy
+   └── Blob Storage → Healthy
+
+File processing health
+
+What is happening with a specific file?
+
+File = ABC.xml
+
+RECEIVED
+PROCESSING
+COMPLETED
+
+Don't confuse the two.
+
+
+---
+
+15. Complete status
+
+I'd recommend thinking about a proper state machine:
+
+┌──────────┐
+                 │ RECEIVED │
+                 └────┬─────┘
+                      ↓
+                ┌────────────┐
+                │ PROCESSING │
+                └─────┬──────┘
+                      │
+          ┌───────────┼───────────┐
+          ↓           ↓           ↓
+      COMPLETED    PARTIAL      FAILED
+                     │
+                     │
+              duplicates/errors
+
+This becomes the source of truth for file processing.
+
+
+---
+
+16. Logging strategy
+
+Don't log every customer.
+
+Instead:
+
+File-level logs
+
+ProcessingStarted
+ProcessingCompleted
+ProcessingFailed
+
+Batch-level logs
+
+BatchStarted
+BatchCompleted
+BatchFailed
+
+Exception-level logs
+
+Database timeout
+Invalid XML
+Storage failure
+Unexpected exception
+
+Avoid:
+
+Customer 1 processed
+Customer 2 processed
+Customer 3 processed
+...
+Customer 10,000,000 processed
+
+Instead:
+
+File: customer.xml
+Batch: 25
+Records: 5000
+Success: 4980
+Duplicate: 20
+Duration: 2.8 sec
+
+That's observability without destroying your telemetry system.
+
+
+---
+
+17. Option padding
+
+This likely refers to fixed-width TXT output.
+
+For example, if your output specification says:
+
+CustomerId = 10 characters
+
+and the value is:
+
+12345
+
+you may need:
+
+12345
+
+or:
+
+0000012345
+
+depending on whether the specification requires right-padding, left-padding, zero-padding, etc.
+
+This isn't cosmetic.
+
+If the downstream system expects:
+
+|CustomerId|Name       |Amount    |
+
+then exact field width is part of the interface contract.
+
+
+---
+
+18. Putting everything together
+
+Your mature architecture starts looking like:
+
+Azure Blob Storage
+                        │
+                        │ input/
+                        ▼
+                 Blob Trigger
+                        │
+                        ▼
+               ┌────────────────┐
+               │ File Processor │
+               └───────┬────────┘
+                       │
+                Validate file
+                       │
+                       ▼
+                Create/Load State
+                       │
+                       ▼
+                 Parse XML
+                       │
+                       ▼
+                Batch records
+                       │
+             ┌─────────┴─────────┐
+             ▼                   ▼
+        Validation          Transformation
+             │                   │
+             └─────────┬─────────┘
+                       ▼
+                  Data Access
+                       │
+                Dapper / EF Core
+                       │
+                       ▼
+                 Stored Procedure
+                       │
+                       ▼
+                  Azure SQL
+                       │
+              ┌────────┴─────────┐
+              ▼                  ▼
+          Successful          Duplicate
+              │                  │
+              ▼                  ▼
+          TXT Output          Error File
+              │
+              └────────┬─────────┘
+                       ▼
+                    Archive
+
+And cross-cutting all of it:
+
+┌─────────────────────────────┐
+        │ Dependency Injection        │
+        │ Structured Logging          │
+        │ Correlation GUID            │
+        │ Validation                  │
+        │ Exception Handling          │
+        │ Retry/Timeout              │
+        │ Configuration              │
+        └─────────────────────────────┘
+
+🎯 What I would focus on learning first
+
+Don't try to learn all of these simultaneously.
+
+I'd go in this order:
+
+1. Azure Function + Blob Trigger lifecycle
+
+
+2. File state management + idempotency
+
+
+3. XML parsing + validation
+
+
+4. Batch processing
+
+
+5. Azure SQL + stored procedures
+
+
+6. Dapper vs EF Core
+
+
+7. Dependency Injection
+
+
+8. Error handling + retry + timeout
+
+
+9. Structured logging + Application Insights
+
+
+10. xUnit + mocking
+
+
+11. Azure DevOps CI/CD
+
+
+12. Concurrency and scalability
+
+
+
+The most important shift is this:
+
+> You're not building an XML converter. You're building a reliable event-driven file-processing system.
+
+
+
+Once you understand that distinction, almost every question your mentor asked—GUID, state, duplicate handling, batching, Dapper/EF, DbContext, health, retries, logs, archive/error folders, and avoiding loops—starts fitting into one coherent architecture. 🚀
